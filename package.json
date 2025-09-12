@@ -1,0 +1,32 @@
+{
+  "name": "mqtt-file-transfer",
+  "version": "1.0.0",
+  "description": "MQTT file transfer library with progress tracking, checksum validation and simple receiver/transmitter APIs.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "test": "ts-node ./test/fileTransfer.spec.ts",
+    "build": "tsc"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "keywords": [
+    "mqtt",
+    "file-transfer",
+    "typescript",
+    "nodejs",
+    "iot"
+  ],
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "commonjs",
+  "author": "DmPrkp",
+  "license": "MIT",
+  "devDependencies": {
+    "mqtt": "^5.14.1",
+    "typescript": "^5.9.2"
+  }
+}
