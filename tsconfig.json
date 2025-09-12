@@ -5,9 +5,14 @@
     "strict": true,
     "esModuleInterop": true,
     "moduleResolution": "node",
+    "declaration": true, 
     "outDir": "dist",
-    "rootDir": ".",
-    "allowJs": true
+    "rootDir": "./src",
   },
-  "include": ["src", "test"]
+  "include": ["src/**/*"],   
+  "exclude": [                 
+    "node_modules",
+    "dist",
+    "test/**/*"
+  ]
 }
