@@ -16,6 +16,7 @@ const receiver = new MqttReceiver({
   topic: TEST_TOPIC,
   outputDir: OUTPUT_DIR,
 });
+receiver.on('error', () => process.exit(1));
 
 receiver.start();
 
@@ -26,19 +27,13 @@ const transmitter = new MqttTransmitter({
 });
 
 receiver.on('done', ({ checksum, fileName }: any) => {
-  console.log(checksum, fileName);
   const origChecksum = require('crypto').createHash('sha256').update(fs.readFileSync(TEST_FILE)).digest('hex');
-
-  checksum === origChecksum ? console.log('done') : process.exit(1);
-
-  clientTx.end();
-  clientRx.end();
-
-  receiver.on('error', () => process.exit(1));
+  checksum === origChecksum ? console.log('done', fileName) : process.exit(1);
+  process.exit()
 });
 
 transmitter.start();
 
 transmitter.on('progress', p => {
-  console.log('progress', p);
+  console.info('progress', p);
 });

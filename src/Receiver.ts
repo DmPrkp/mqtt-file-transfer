@@ -37,8 +37,8 @@ export class MqttReceiver extends EventEmitter {
 
     this.client.on('message', (topic, payload) => {
       if (topic !== this.topic) return;
-
       if (this.tryHandleJson(payload)) return;
+
       this.handleChunk(payload);
     });
   }
@@ -71,11 +71,12 @@ export class MqttReceiver extends EventEmitter {
     this.hash = createHash('sha256');
     const filePath = join(this.outputDir, this.fileName);
     this.fileStream = createWriteStream(filePath);
-    this.emit('start', this.fileName);
+    this.emit<'start'>('start', this.fileName);
   }
 
   private finishFile(checksum: string) {
     this.expectedChecksum = checksum;
+
     if (!this.fileStream) return;
 
     this.fileStream.end(() => {
@@ -96,6 +97,7 @@ export class MqttReceiver extends EventEmitter {
 
   private handleChunk(chunk: Buffer) {
     if (!this.fileStream) return;
+
     this.hash.update(chunk);
     this.received += chunk.length;
     this.fileStream.write(chunk);

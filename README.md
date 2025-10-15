@@ -18,7 +18,7 @@ npm install mqtt-file-transfer
 
 ## Usage
 
-### Transmitter;
+### Transmitter
 
 ```ts
 import { createReadStream } from "fs";
@@ -66,22 +66,6 @@ receiver.on("error", (err) => console.error("error", err));
 receiver.start();
 ```
 
-## Testing
-
-A sample test file is included in test/fileTransfer.spec.ts.
-Run tests with:
-
-```bash
-npm install
-npm run test
-```
-
-## Notes
-
-- Files are split into chunks using Node.js streams.
-- Each transfer emits a start message with the file name, progress updates, and an end message with the checksum.
-- The receiver verifies file integrity and emits events for start, progress, done, or errors.
-
-License
+### License
 
 MIT
