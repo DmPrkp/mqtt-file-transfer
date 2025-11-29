@@ -26,6 +26,7 @@
   "author": "DmPrkp",
   "license": "MIT",
   "devDependencies": {
+    "ts-node": "^10.9.2",
     "mqtt": "^5.14.1",
     "typescript": "^5.9.2"
   },

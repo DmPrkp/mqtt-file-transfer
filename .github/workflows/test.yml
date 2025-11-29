@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      mosquitto:
+        image: eclipse/mosquitto:2
+        ports:
+          - 1883:1883
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Wait for MQTT broker
+        run: |
+          for i in {1..10}; do
+            if nc -z localhost 1883; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
+      - name: Run tests
+        run: npm test
