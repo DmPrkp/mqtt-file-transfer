@@ -79,13 +79,11 @@ const timer = setTimeout(() => {
 
 receiver.on('error', err => {
   console.error('Receiver error', err);
-  clearTimeout(timer);
   shutdown(1);
 });
 
 transmitter.on('error', err => {
   console.error('Transmitter error', err);
-  clearTimeout(timer);
   shutdown(1);
 });
 
@@ -94,11 +92,9 @@ receiver.on('done', ({ checksum, fileName }: any) => {
 
   if (checksum === origChecksum) {
     console.log('done', fileName);
-    clearTimeout(timer);
     shutdown(0);
   } else {
     console.error('Checksum mismatch');
-    clearTimeout(timer);
     shutdown(1);
   }
 });
@@ -114,6 +110,5 @@ Promise.all([waitForConnection(clientRx), waitForConnection(clientTx)])
   })
   .catch(err => {
     console.error('Failed to connect to MQTT broker', err);
-    clearTimeout(timer);
     shutdown(1);
   });
