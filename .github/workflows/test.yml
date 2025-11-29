@@ -11,10 +11,13 @@ jobs:
     services:
       mosquitto:
         image: eclipse/mosquitto:2.0.18
-        volumes:
-          - ${{ github.workspace }}/.github/mosquitto.conf:/mosquitto/config/mosquitto.conf
         ports:
           - 1883:1883
+        command: >-
+          /bin/sh -c "echo 'listener 1883 0.0.0.0' > /mosquitto/config/mosquitto.conf
+          && echo 'allow_anonymous true' >> /mosquitto/config/mosquitto.conf
+          && echo 'persistence false' >> /mosquitto/config/mosquitto.conf
+          && mosquitto -c /mosquitto/config/mosquitto.conf"
         options: >-
           --health-cmd "mosquitto_sub -h localhost -p 1883 -t '$SYS/#' -C 1 -W 5"
           --health-interval 5s
