@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       mosquitto:
-        image: eclipse/mosquitto:2
+        image: eclipse/mosquitto:2.0.18
         volumes:
           - ${{ github.workspace }}/.github/mosquitto.conf:/mosquitto/config/mosquitto.conf
         ports:
