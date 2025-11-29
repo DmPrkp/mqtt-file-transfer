@@ -17,7 +17,7 @@ jobs:
           cache: npm
       - name: Start Mosquitto broker
         run: |
-          docker run -d --name mosquitto-ci -p 1883:1883 eclipse/mosquitto:2.0.18 \
+          docker run -d --name mosquitto-ci -p 1883:1883 eclipse-mosquitto:2.0.18 \
             /bin/sh -c "echo 'listener 1883 0.0.0.0' > /mosquitto/config/mosquitto.conf \
             && echo 'allow_anonymous true' >> /mosquitto/config/mosquitto.conf \
             && echo 'persistence false' >> /mosquitto/config/mosquitto.conf \
