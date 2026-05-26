@@ -100,9 +100,10 @@ receiver.on('done', ({ checksum, fileName }: any) => {
 });
 
 Promise.all([waitForConnection(clientRx), waitForConnection(clientTx)])
-  .then(() => {
-    receiver.start();
-    transmitter.start();
+  .then(async () => {
+    await receiver.start();
+    await new Promise(r => setTimeout(r, 100));
+    await transmitter.start();
 
     transmitter.on('progress', p => {
       console.info('progress', p);

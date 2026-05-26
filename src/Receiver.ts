@@ -3,12 +3,7 @@ import { createWriteStream, existsSync, mkdirSync } from "fs";
 import { join } from "path";
 import { createHash } from "crypto";
 import { EventEmitter } from "events";
-
-export interface MqttReceiverOptions {
-  client: MqttClient;
-  topic: string;
-  outputDir: string;
-}
+import { MqttReceiverOptions } from "./types";
 
 export class MqttReceiver extends EventEmitter {
   private client: MqttClient;
@@ -20,6 +15,7 @@ export class MqttReceiver extends EventEmitter {
   private expectedSize = 0;
   private expectedChecksum = "";
   private fileName = "";
+  private state = 'idle';
 
   constructor({ client, topic, outputDir }: MqttReceiverOptions) {
     super();
@@ -31,11 +27,17 @@ export class MqttReceiver extends EventEmitter {
   }
 
   public start() {
+    if (this.state !== 'idle') return;
+    this.state = 'receiving';
+
     this.client.subscribe(this.topic, { qos: 2 });
-    this.client.on("message", (topic, payload) => {
-      if (topic !== this.topic) return;
-      this.handleMessage(payload);
-    });
+    this.client.on("message", this.onMessage);
+  }
+
+  private onMessage = (topic: string, payload: Buffer) => {
+    if (topic !== this.topic || this.state !== "receiving") return;
+
+    this.handleMessage(payload);
   }
 
   private handleMessage(payload: Buffer) {
@@ -62,6 +64,12 @@ export class MqttReceiver extends EventEmitter {
     this.hash = createHash("sha256");
     const filePath = join(this.outputDir, fileName);
     this.fileStream = createWriteStream(filePath);
+
+    this.fileStream.on("error", (error) => {
+      this.state = "error"
+      this.emit("error", error);
+    });
+
     this.emit("start", fileName);
   }
 
@@ -70,11 +78,19 @@ export class MqttReceiver extends EventEmitter {
     this.fileStream?.write(chunk);
     this.hash.update(chunk);
     this.received += chunk.length;
-    this.client.publish(`${this.topic}/ack`, JSON.stringify({ type: "ack", id }), { qos: 2 });
+    this.client.publish(`${this.topic}/ack`, JSON.stringify({ type: "ack", id }), { qos: 2 }, (err) => {
+      if (err) this.emit("error", err);
+    });
+
+    if (id % 100 === 0 || this.received === this.expectedSize) {
+      const progress = ((this.received / this.expectedSize) * 100).toFixed(0);
+      this.emit("progress", progress);
+    }
   }
 
   private finishFile(expectedChecksum: string) {
     this.expectedChecksum = expectedChecksum;
+    this.state = 'finished'
 
     if (this.fileStream) {
       this.fileStream.end(() => this.calculateChecksum());
@@ -91,5 +107,12 @@ export class MqttReceiver extends EventEmitter {
     } else {
       this.emit("error", new Error(`Checksum mismatch: expected ${this.expectedChecksum}, got ${actual}`));
     }
+  }
+
+  public stop() {
+    this.state = "stopped";
+    this.fileStream?.destroy();
+    this.client.removeListener("message", this.onMessage);
+    this.removeAllListeners();
   }
 }

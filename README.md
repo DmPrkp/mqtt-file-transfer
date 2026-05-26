@@ -35,9 +35,15 @@ const transmitter = new MqttTransmitter({
 });
 
 transmitter.on("progress", (percent) => console.log("progress", percent));
-transmitter.on("done", ({ fileName, checksum }) =>
-  console.log("done", fileName, checksum)
-);
+transmitter.on("error", (err) => {
+  console.error("error", err);
+  transmitter.stop();
+});
+
+transmitter.on("done", ({ fileName, checksum }) => {
+  console.log("done", fileName, checksum);
+  transmitter.stop();
+});
 
 transmitter.start();
 ```
@@ -58,10 +64,14 @@ const receiver = new MqttReceiver({
 
 receiver.on("start", (fileName) => console.log("started", fileName));
 receiver.on("progress", (percent) => console.log("progress", percent));
-receiver.on("done", ({ fileName, checksum }) =>
-  console.log("done", fileName, checksum)
-);
-receiver.on("error", (err) => console.error("error", err));
+receiver.on("done", ({ fileName, checksum }) => {
+  console.log("done", fileName, checksum);
+  receiver.stop();
+});
+receiver.on("error", (err) => {
+  console.error("error", err);
+  receiver.stop();
+});
 
 receiver.start();
 ```
