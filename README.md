@@ -20,7 +20,7 @@ npm install mqtt-file-transfer
 
 ### Transmitter
 
-```ts
+```typescript
 import { createReadStream } from "fs";
 import mqtt from "mqtt";
 import { MqttTransmitter } from "mqtt-file-transfer";
@@ -32,6 +32,11 @@ const transmitter = new MqttTransmitter({
   client,
   topic: "file-transfer",
   stream,
+  props: {
+    pendingAckTimeout: 5000, // ms to wait for a chunk ACK before retrying/failing
+    throttling: 50, // ms delay between chunks
+    retry: 3, // number of retries per chunk on ACK timeout
+  },
 });
 
 transmitter.on("progress", (percent) => console.log("progress", percent));
@@ -48,9 +53,17 @@ transmitter.on("done", ({ fileName, checksum }) => {
 transmitter.start();
 ```
 
+#### Transmitter `props` (optional)
+
+| Option              | Default | Description                                               |
+| ------------------- | ------- | --------------------------------------------------------- |
+| `pendingAckTimeout` | `5000`  | Milliseconds to wait for a chunk ACK before retry/failure |
+| `throttling`        | `50`    | Milliseconds delay between sending each chunk             |
+| `retry`             | `3`     | Number of retry attempts per chunk before giving up       |
+
 ### Receiver
 
-```ts
+```typescript
 import mqtt from "mqtt";
 import { MqttReceiver } from "mqtt-file-transfer";
 
@@ -60,6 +73,9 @@ const receiver = new MqttReceiver({
   client,
   topic: "file-transfer",
   outputDir: "./downloads",
+  props: {
+    pendingChunkTimeout: 20000, // ms to wait for the next chunk before failing
+  },
 });
 
 receiver.on("start", (fileName) => console.log("started", fileName));
@@ -75,6 +91,12 @@ receiver.on("error", (err) => {
 
 receiver.start();
 ```
+
+#### Receiver `props` (optional)
+
+| Option                | Default | Description                                                             |
+| --------------------- | ------- | ----------------------------------------------------------------------- |
+| `pendingChunkTimeout` | `20000` | Milliseconds to wait for the next chunk before emitting a timeout error |
 
 ### License
 

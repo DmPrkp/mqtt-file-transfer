@@ -1,11 +1,13 @@
 {
   "name": "mqtt-file-transfer",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "MQTT file transfer library with progress tracking, checksum validation and simple receiver/transmitter APIs.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "test": "ts-node ./test/fileTransfer.spec.ts",
+    "test": "npm run test:transfer && npm run test:timeout",
+    "test:transfer": "ts-node ./test/fileTransfer.spec.ts",
+    "test:timeout": "ts-node ./test/chunkTimeout.spec.ts",
     "build": "tsc"
   },
   "engines": {
