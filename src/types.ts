@@ -7,10 +7,15 @@ type TXProps = {
   retry: number
 }
 
+type RXProps = {
+  pendingChunkTimeout: number
+}
+
 export type MqttReceiverOptions = {
   client: MqttClient;
   topic: string;
   outputDir: string;
+  props?: RXProps
 }
 
 export type MqttTransmitterOptions = {

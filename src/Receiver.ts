@@ -5,6 +5,8 @@ import { createHash } from "crypto";
 import { EventEmitter } from "events";
 import { MqttReceiverOptions } from "./types";
 
+const CHUNK_TIMEOUT = 20000;
+
 export class MqttReceiver extends EventEmitter {
   private client: MqttClient;
   private topic: string;
@@ -16,27 +18,33 @@ export class MqttReceiver extends EventEmitter {
   private expectedChecksum = "";
   private fileName = "";
   private state = 'idle';
+  private chunkTimeout?: ReturnType<typeof setTimeout>;
+  private pendingChunkTimeout: number
 
-  constructor({ client, topic, outputDir }: MqttReceiverOptions) {
+  constructor({ client, topic, outputDir, props }: MqttReceiverOptions) {
     super();
+
     this.client = client;
     this.topic = topic;
-    this.outputDir = outputDir;
 
     if (!existsSync(outputDir)) mkdirSync(outputDir, { recursive: true });
+
+    this.outputDir = outputDir;
+
+    const { pendingChunkTimeout } = props || {}
+    this.pendingChunkTimeout = pendingChunkTimeout || CHUNK_TIMEOUT
+
   }
 
   public start() {
     if (this.state !== 'idle') return;
     this.state = 'receiving';
-
     this.client.subscribe(this.topic, { qos: 2 });
     this.client.on("message", this.onMessage);
   }
 
   private onMessage = (topic: string, payload: Buffer) => {
     if (topic !== this.topic || this.state !== "receiving") return;
-
     this.handleMessage(payload);
   }
 
@@ -57,6 +65,24 @@ export class MqttReceiver extends EventEmitter {
     } catch { }
   }
 
+  private resetChunkTimeout() {
+    if (this.chunkTimeout) clearTimeout(this.chunkTimeout);
+    this.chunkTimeout = setTimeout(() => {
+      this.state = "error";
+      this.client.unsubscribe(this.topic);
+      this.client.removeListener("message", this.onMessage);
+      this.fileStream?.destroy();
+      this.emit("error", new Error(`Chunk timeout: no chunk received within ${this.pendingChunkTimeout / 1000}s`));
+    }, this.pendingChunkTimeout);
+  }
+
+  private clearChunkTimeout() {
+    if (this.chunkTimeout) {
+      clearTimeout(this.chunkTimeout);
+      this.chunkTimeout = undefined;
+    }
+  }
+
   private startFile(fileName: string, size: number) {
     this.fileName = fileName;
     this.expectedSize = size;
@@ -64,16 +90,16 @@ export class MqttReceiver extends EventEmitter {
     this.hash = createHash("sha256");
     const filePath = join(this.outputDir, fileName);
     this.fileStream = createWriteStream(filePath);
-
     this.fileStream.on("error", (error) => {
       this.state = "error"
       this.emit("error", error);
     });
-
+    this.resetChunkTimeout();
     this.emit("start", fileName);
   }
 
   private handleChunk(id: number, base64: string) {
+    this.resetChunkTimeout();
     const chunk = Buffer.from(base64, "base64");
     this.fileStream?.write(chunk);
     this.hash.update(chunk);
@@ -81,7 +107,6 @@ export class MqttReceiver extends EventEmitter {
     this.client.publish(`${this.topic}/ack`, JSON.stringify({ type: "ack", id }), { qos: 2 }, (err) => {
       if (err) this.emit("error", err);
     });
-
     if (id % 100 === 0 || this.received === this.expectedSize) {
       const progress = ((this.received / this.expectedSize) * 100).toFixed(0);
       this.emit("progress", progress);
@@ -89,14 +114,13 @@ export class MqttReceiver extends EventEmitter {
   }
 
   private finishFile(expectedChecksum: string) {
+    this.clearChunkTimeout();
     this.expectedChecksum = expectedChecksum;
     this.state = 'finished'
-
     if (this.fileStream) {
       this.fileStream.end(() => this.calculateChecksum());
       return
     };
-
     this.calculateChecksum()
   }
 
@@ -110,6 +134,7 @@ export class MqttReceiver extends EventEmitter {
   }
 
   public stop() {
+    this.clearChunkTimeout();
     this.state = "stopped";
     this.fileStream?.destroy();
     this.client.removeListener("message", this.onMessage);
