@@ -82,14 +82,15 @@ export class MqttTransmitter extends EventEmitter {
     }
   }
 
-  private sendChunk(id: number, data: string): Promise<void> {
+  private sendChunk(id: number, data: string, attempt = 0): Promise<void> {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.pendingAck = undefined;
         const error = new Error(`ACK timeout for chunk ${id}`);
         this.emit("error", error);
-        if (this.retry) {
-          // TODO: publish again
+
+        if (attempt < this.retry) {
+          this.sendChunk(id, data, attempt + 1).then(resolve, reject);
         } else {
           reject(error);
         }
