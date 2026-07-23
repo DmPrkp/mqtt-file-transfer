@@ -4,7 +4,7 @@ import { EventEmitter } from "events";
 import { basename } from "path";
 import { ReadStream, existsSync, statSync } from "fs";
 import { MqttTransmitterOptions } from "./types";
-import { PENDING_ACK_TIMEOUT } from "./constants";
+import { PENDING_ACK_TIMEOUT, THROTTLING_TIME, RETRY_ATTEMPTS } from "./constants";
 export class MqttTransmitter extends EventEmitter {
   private client: MqttClient;
   private topic: string;
@@ -15,6 +15,9 @@ export class MqttTransmitter extends EventEmitter {
   private fileName: string;
   private chunkId = 0;
   private pendingAckTimeout: number
+  private throttling: number
+  private retry: number
+
   private stopped = false
 
   private pendingAck?: (id: number) => void;
@@ -22,10 +25,14 @@ export class MqttTransmitter extends EventEmitter {
   constructor({ client, topic, stream, props }: MqttTransmitterOptions) {
     super();
 
+    const { pendingAckTimeout, throttling, retry } = props || {}
+
     this.client = client;
     this.topic = topic;
     this.stream = stream;
-    this.pendingAckTimeout = props?.pendingAckTimeout || PENDING_ACK_TIMEOUT
+    this.throttling = throttling || THROTTLING_TIME
+    this.pendingAckTimeout = (pendingAckTimeout || PENDING_ACK_TIMEOUT) + this.throttling
+    this.retry = retry || RETRY_ATTEMPTS
 
     const filePath = this.stream.path?.toString();
     this.fileName = basename(filePath || `file_${Date.now()}`);
@@ -48,12 +55,14 @@ export class MqttTransmitter extends EventEmitter {
 
       for await (const chunk of this.stream) {
         if (this.stopped) break
-        const id = ++this.chunkId;
-        const base64 = (chunk as Buffer).toString("base64");
 
+        const id = ++this.chunkId;
+        const base64 = chunk.toString("base64");
+
+        await new Promise(r => { setTimeout(() => r(null), this.throttling) })
         await this.sendChunk(id, base64);
 
-        this.transferred += (chunk as Buffer).length;
+        this.transferred += chunk.length;
         this.hash.update(chunk);
 
         if (id % 100 === 0 || this.transferred === this.totalSize) {
@@ -79,7 +88,11 @@ export class MqttTransmitter extends EventEmitter {
         this.pendingAck = undefined;
         const error = new Error(`ACK timeout for chunk ${id}`);
         this.emit("error", error);
-        reject(error);
+        if (this.retry) {
+          // TODO: publish again
+        } else {
+          reject(error);
+        }
       }, this.pendingAckTimeout);
 
       this.pendingAck = (ackId: number) => {

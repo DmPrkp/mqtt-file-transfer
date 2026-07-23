@@ -3,6 +3,8 @@ import { ReadStream } from "fs";
 
 type TXProps = {
   pendingAckTimeout: number
+  throttling: number
+  retry: number
 }
 
 export type MqttReceiverOptions = {
