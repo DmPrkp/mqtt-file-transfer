@@ -1,14 +1,19 @@
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import mqtt from 'mqtt';
 import { MqttReceiver } from '../src';
 
 const MQTT_URL = 'mqtt://localhost:1883';
-const TEST_TOPIC = 'test/file-transfer-timeout';
+const TEST_TOPIC = 'test/file-transfer-order';
 const OUTPUT_DIR = path.join(__dirname, 'downloads');
-const CHUNK_TIMEOUT_MS = 2000; // short timeout to keep the test fast
-const TOLERANCE_MS = 500;      // allowed slack around the expected fire time
+const TEST_FILE_NAME = 'ordered.txt';
+const CHUNK_TIMEOUT_MS = 2000;
+const TOLERANCE_MS = 500;
 const TEST_TIMEOUT_MS = 20000;
+
+const CHUNKS = ['Hello, ', 'this is ', 'a test.'];
+const FULL_CONTENT = CHUNKS.join('');
 
 function ensureDirectories() {
   fs.rmSync(OUTPUT_DIR, { recursive: true, force: true });
@@ -21,17 +26,14 @@ function waitForConnection(client: mqtt.MqttClient) {
       cleanup();
       resolve();
     };
-
     const handleError = (err: Error) => {
       cleanup();
       reject(err);
     };
-
     const cleanup = () => {
       client.off('connect', handleConnect);
       client.off('error', handleError);
     };
-
     client.once('connect', handleConnect);
     client.once('error', handleError);
   });
@@ -41,6 +43,14 @@ function shutdown(code: number) {
   clientTx.end();
   clientRx.end();
   process.exit(code);
+}
+
+function publishChunk(id: number, text: string) {
+  clientTx.publish(
+    TEST_TOPIC,
+    JSON.stringify({ type: 'chunk', id, data: Buffer.from(text).toString('base64') }),
+    { qos: 2 }
+  );
 }
 
 ensureDirectories();
@@ -58,40 +68,38 @@ const receiver = new MqttReceiver({
 });
 
 const overallTimer = setTimeout(() => {
-  console.error(`Test timed out after ${TEST_TIMEOUT_MS}ms without the expected timeout error`);
+  console.error(`Test timed out after ${TEST_TIMEOUT_MS}ms`);
   shutdown(1);
 }, TEST_TIMEOUT_MS);
 
-let startedAt = 0;
-
-receiver.on('start', () => {
-  startedAt = Date.now();
-});
+let lastValidChunkAt = 0;
 
 receiver.on('error', (err: Error) => {
-  clearTimeout(overallTimer);
-
-  const elapsed = Date.now() - startedAt;
-  const withinExpectedWindow =
-    Math.abs(elapsed - CHUNK_TIMEOUT_MS) <= TOLERANCE_MS;
   const isTimeoutError = /timeout/i.test(err.message);
 
   if (!isTimeoutError) {
-    console.error('Expected a chunk timeout error, got:', err.message);
+    clearTimeout(overallTimer);
+    console.error('Expected chunk timeout, got:', err.message);
     shutdown(1);
     return;
   }
 
+  clearTimeout(overallTimer);
+  const elapsed = Date.now() - lastValidChunkAt;
+  const withinExpectedWindow = Math.abs(elapsed - CHUNK_TIMEOUT_MS) <= TOLERANCE_MS;
+
   if (!withinExpectedWindow) {
     console.error(
-      `Timeout fired after ${elapsed}ms, expected ~${CHUNK_TIMEOUT_MS}ms (+/- ${TOLERANCE_MS}ms)`
+      `Timeout fired ${elapsed}ms after last VALID chunk, expected ~${CHUNK_TIMEOUT_MS}ms — ` +
+      `duplicate/out-of-order chunk incorrectly reset the timer`
     );
     shutdown(1);
     return;
   }
 
   console.log(
-    `Chunk timeout fired correctly: expected ~${CHUNK_TIMEOUT_MS}ms, got ${elapsed}ms —`,
+    `Out-of-order chunk correctly ignored (no timer reset). ` +
+    `Timeout fired ${elapsed}ms after last valid chunk (expected ~${CHUNK_TIMEOUT_MS}ms):`,
     err.message
   );
   shutdown(0);
@@ -99,7 +107,7 @@ receiver.on('error', (err: Error) => {
 
 receiver.on('done', () => {
   clearTimeout(overallTimer);
-  console.error('Receiver unexpectedly completed a transfer that was never sent');
+  console.error('Receiver unexpectedly completed — duplicate chunk must have been written');
   shutdown(1);
 });
 
@@ -107,13 +115,25 @@ Promise.all([waitForConnection(clientRx), waitForConnection(clientTx)])
   .then(async () => {
     await receiver.start();
 
-    // Simulate a transmitter that announces a transfer, then stalls forever
-    // (never publishes any "chunk" or "end" messages).
     clientTx.publish(
       TEST_TOPIC,
-      JSON.stringify({ type: 'start', fileName: 'stalled.json', size: 1024 }),
+      JSON.stringify({ type: 'start', fileName: TEST_FILE_NAME, size: FULL_CONTENT.length }),
       { qos: 2 }
     );
+
+    await new Promise(r => setTimeout(r, 100));
+
+    publishChunk(1, CHUNKS[0]); // id=1
+    await new Promise(r => setTimeout(r, 100));
+
+    publishChunk(2, CHUNKS[1]); // id=2
+    await new Promise(r => setTimeout(r, 100));
+
+    publishChunk(3, CHUNKS[2]); // id=3
+    lastValidChunkAt = Date.now();
+    await new Promise(r => setTimeout(r, 100));
+
+    publishChunk(2, CHUNKS[1]); // id=2 skip
   })
   .catch(err => {
     console.error('Failed to connect to MQTT broker', err);

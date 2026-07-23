@@ -5,9 +5,10 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "test": "npm run test:transfer && npm run test:timeout",
+    "test": "npm run test:transfer && npm run test:timeout && npm run test:order",
     "test:transfer": "ts-node ./test/fileTransfer.spec.ts",
     "test:timeout": "ts-node ./test/chunkTimeout.spec.ts",
+    "test:order": "ts-node ./test/chunkOrder.spec.ts",
     "build": "tsc"
   },
   "engines": {
