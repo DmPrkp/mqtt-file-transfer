@@ -8,7 +8,7 @@ type TXProps = {
 }
 
 type RXProps = {
-  pendingChunkTimeout: number
+  pendingChunkTimeout?: number
 }
 
 export type MqttReceiverOptions = {
