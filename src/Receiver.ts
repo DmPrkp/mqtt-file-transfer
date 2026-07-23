@@ -20,6 +20,7 @@ export class MqttReceiver extends EventEmitter {
   private state = 'idle';
   private chunkTimeout?: ReturnType<typeof setTimeout>;
   private pendingChunkTimeout: number
+  private lastChunkId = 0;
 
   constructor({ client, topic, outputDir, props }: MqttReceiverOptions) {
     super();
@@ -87,6 +88,7 @@ export class MqttReceiver extends EventEmitter {
     this.fileName = fileName;
     this.expectedSize = size;
     this.received = 0;
+    this.lastChunkId = 0;
     this.hash = createHash("sha256");
     const filePath = join(this.outputDir, fileName);
     this.fileStream = createWriteStream(filePath);
@@ -99,7 +101,13 @@ export class MqttReceiver extends EventEmitter {
   }
 
   private handleChunk(id: number, base64: string) {
+    if (id !== this.lastChunkId + 1) {
+      return;
+    }
+
+    this.lastChunkId = id;
     this.resetChunkTimeout();
+
     const chunk = Buffer.from(base64, "base64");
     this.fileStream?.write(chunk);
     this.hash.update(chunk);
