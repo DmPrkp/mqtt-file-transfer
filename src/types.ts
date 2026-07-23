@@ -1,10 +1,10 @@
-import { MqttClient } from "mqtt/*";
+import { MqttClient } from "mqtt";
 import { ReadStream } from "fs";
 
 type TXProps = {
-  pendingAckTimeout: number
-  throttling: number
-  retry: number
+  pendingAckTimeout?: number
+  throttling?: number
+  retry?: number
 }
 
 type RXProps = {
